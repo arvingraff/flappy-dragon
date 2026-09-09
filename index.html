@@ -171,6 +171,111 @@
     background: linear-gradient(#ffcf3f, #ff5a1f);
     color: #3a0f00;
   }
+  #menuRow {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    pointer-events: auto;
+  }
+  #menuRow button {
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px 16px;
+    border-radius: 20px;
+    border: 1.5px solid rgba(255,255,255,0.4);
+    background: rgba(0,0,0,0.35);
+    color: #fff;
+  }
+  #mpSearchPanel, #mpResultPanel, #mpWaitPanel {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: #fff;
+    text-align: center;
+    background: rgba(0,0,0,0.8);
+    z-index: 30;
+    padding: 0 24px;
+  }
+  #mpSearchPanel.hidden, #mpResultPanel.hidden, #mpWaitPanel.hidden { display: none; }
+  #mpSearchPanel h2, #mpResultPanel h2, #mpWaitPanel h2 {
+    color: #ffd23f;
+    margin: 0 0 8px 0;
+    font-size: 24px;
+  }
+  #mpSearchPanel p, #mpResultPanel p, #mpWaitPanel p {
+    max-width: 280px;
+    opacity: 0.85;
+    font-size: 15px;
+    margin: 0 0 18px 0;
+  }
+  .spinner {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 4px solid rgba(255,255,255,0.25);
+    border-top-color: #ffd23f;
+    animation: spin 0.9s linear infinite;
+    margin-bottom: 22px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #mpCancelBtn, #mpRematchBtn, #mpMenuBtn, #mpLeaveBtn {
+    font-size: 15px;
+    font-weight: 700;
+    padding: 10px 22px;
+    border-radius: 22px;
+    border: none;
+    margin: 4px;
+    background: linear-gradient(#ffcf3f, #ff5a1f);
+    color: #3a0f00;
+  }
+  #mpMenuBtn, #mpLeaveBtn {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 1.5px solid rgba(255,255,255,0.4);
+  }
+  #mpResultScores {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 18px;
+    color: #ffd23f;
+  }
+  #mpVsPanel {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 70px);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(0,0,0,0.4);
+    padding: 8px 16px;
+    border-radius: 16px;
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: #fff;
+    z-index: 12;
+    pointer-events: none;
+  }
+  #mpVsPanel.hidden { display: none; }
+  #mpVsPanel .mpLabel {
+    display: block;
+    font-size: 11px;
+    opacity: 0.7;
+    letter-spacing: 1px;
+  }
+  #mpVsPanel > div:not(.mpVsDivider) {
+    font-size: 18px;
+    font-weight: 800;
+    color: #ffd23f;
+    text-align: center;
+  }
+  .mpVsDivider {
+    font-size: 12px;
+    opacity: 0.6;
+  }
 </style>
 </head>
 <body>
@@ -191,12 +296,44 @@
   <div id="medalRow"></div>
   <div id="rankInfo"></div>
   <div class="tapText" id="tapText">TAP TO START</div>
+  <div id="menuRow">
+    <button id="menuLeaderboardBtn">🏆 Leaderboard</button>
+    <button id="menuMultiplayerBtn">🎮 Multiplayer</button>
+  </div>
 </div>
 
 <div id="leaderboardPanel" class="hidden">
   <h2>🏆 Top 10</h2>
   <ol id="leaderboardList"></ol>
   <button id="closeBoardBtn">Close</button>
+</div>
+
+<div id="mpSearchPanel" class="hidden">
+  <h2>🌐 Finding an opponent…</h2>
+  <p>Searching the public matchmaking network for another Iron Pilot player.</p>
+  <div class="spinner"></div>
+  <button id="mpCancelBtn">Cancel</button>
+</div>
+
+<div id="mpVsPanel" class="hidden">
+  <div><span class="mpLabel">YOU</span><span id="mpMyScore">0</span></div>
+  <div class="mpVsDivider">VS</div>
+  <div><span class="mpLabel" id="mpOppLabel">OPP</span><span id="mpOppScore">0</span></div>
+</div>
+
+<div id="mpWaitPanel" class="hidden">
+  <h2>YOU CRASHED!</h2>
+  <p>Waiting for your opponent to finish their run…</p>
+  <div class="spinner"></div>
+  <button id="mpLeaveBtn">Leave Match</button>
+</div>
+
+<div id="mpResultPanel" class="hidden">
+  <h2 id="mpResultTitle">RESULT</h2>
+  <p id="mpResultSub"></p>
+  <div id="mpResultScores"></div>
+  <button id="mpRematchBtn">Search Again</button>
+  <button id="mpMenuBtn">Main Menu</button>
 </div>
 
 <script>
@@ -221,6 +358,22 @@
   const leaderboardPanel = document.getElementById('leaderboardPanel');
   const leaderboardList = document.getElementById('leaderboardList');
   const closeBoardBtn = document.getElementById('closeBoardBtn');
+  const menuLeaderboardBtn = document.getElementById('menuLeaderboardBtn');
+  const menuMultiplayerBtn = document.getElementById('menuMultiplayerBtn');
+  const mpSearchPanel = document.getElementById('mpSearchPanel');
+  const mpCancelBtn = document.getElementById('mpCancelBtn');
+  const mpVsPanel = document.getElementById('mpVsPanel');
+  const mpMyScoreEl = document.getElementById('mpMyScore');
+  const mpOppScoreEl = document.getElementById('mpOppScore');
+  const mpOppLabel = document.getElementById('mpOppLabel');
+  const mpWaitPanel = document.getElementById('mpWaitPanel');
+  const mpLeaveBtn = document.getElementById('mpLeaveBtn');
+  const mpResultPanel = document.getElementById('mpResultPanel');
+  const mpResultTitle = document.getElementById('mpResultTitle');
+  const mpResultSub = document.getElementById('mpResultSub');
+  const mpResultScores = document.getElementById('mpResultScores');
+  const mpRematchBtn = document.getElementById('mpRematchBtn');
+  const mpMenuBtn = document.getElementById('mpMenuBtn');
 
   let dpr = Math.max(1, window.devicePixelRatio || 1);
   let W = 0, H = 0;
@@ -251,8 +404,12 @@
   const BOLT_SPEED = 420;       // px/s, villain energy bolts
   const LEADERBOARD_KEY = 'ironDragonLeaderboard';
 
-  const STATE = { START: 'start', PLAYING: 'playing', DEAD: 'dead' };
+  const STATE = {
+    START: 'start', PLAYING: 'playing', DEAD: 'dead',
+    MP_SEARCH: 'mp_search', MP_PLAYING: 'mp_playing', MP_RESULT: 'mp_result'
+  };
   let state = STATE.START;
+  function isPlayingState(s) { return s === STATE.PLAYING || s === STATE.MP_PLAYING; }
 
   const BEST_KEY = 'ironDragonBestScore';
   let best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
@@ -294,6 +451,186 @@
   }
   boardBtn.addEventListener('click', (e) => { e.stopPropagation(); openBoard(); });
   closeBoardBtn.addEventListener('click', (e) => { e.stopPropagation(); closeBoard(); });
+  menuLeaderboardBtn.addEventListener('click', (e) => { e.stopPropagation(); openBoard(); });
+
+  // ---------- Multiplayer (serverless P2P matchmaking via Trystero/WebRTC) ----------
+  // Each player races their own independently-generated obstacle course with identical
+  // rules/difficulty, while live scores are exchanged so you can see who's ahead.
+  const MP_APP_ID = 'iron-pilot-flap-v1';
+  const MP_ROOM_ID = 'public-lobby';
+  const MP_SEARCH_TIMEOUT_MS = 25000;
+  let trysteroJoinRoom = null;
+  const mp = {
+    room: null,
+    scoreAction: null,
+    opponentId: null,
+    myFinished: false,
+    myFinalScore: 0,
+    oppScore: 0,
+    oppFinalScore: 0,
+    oppFinished: false,
+    oppLeft: false,
+    searchTimer: null
+  };
+
+  function resetMpState() {
+    mp.opponentId = null;
+    mp.myFinished = false;
+    mp.myFinalScore = 0;
+    mp.oppScore = 0;
+    mp.oppFinalScore = 0;
+    mp.oppFinished = false;
+    mp.oppLeft = false;
+    mpOppLabel.textContent = 'OPP';
+    mpMyScoreEl.textContent = '0';
+    mpOppScoreEl.textContent = '0';
+  }
+
+  function leaveMultiplayer() {
+    clearTimeout(mp.searchTimer);
+    if (mp.room) { try { mp.room.leave(); } catch (e) { /* already gone */ } }
+    mp.room = null;
+    mp.scoreAction = null;
+  }
+
+  function showMainMenu() {
+    state = STATE.START;
+    overlayTitle.textContent = 'IRON PILOT';
+    overlaySub.textContent = 'Tap or press Space to flap. Dodge the pillars and villain drones, and grab shields to survive hits.';
+    finalScoreRow.style.display = 'none';
+    medalRow.innerHTML = '';
+    rankInfo.textContent = '';
+    tapText.textContent = 'TAP TO START';
+    boardBtn.style.display = 'flex';
+    overlay.classList.remove('hidden');
+  }
+
+  function cancelMultiplayerSearch() {
+    leaveMultiplayer();
+    mpSearchPanel.classList.add('hidden');
+    showMainMenu();
+  }
+
+  async function startMultiplayerSearch() {
+    overlay.classList.add('hidden');
+    closeBoard();
+    state = STATE.MP_SEARCH;
+    resetMpState();
+    mpSearchPanel.classList.remove('hidden');
+
+    if (!trysteroJoinRoom) {
+      try {
+        const mod = await import('https://cdn.jsdelivr.net/npm/@trystero-p2p/torrent@0.25.4/+esm');
+        trysteroJoinRoom = mod.joinRoom;
+      } catch (e) {
+        mpSearchPanel.classList.add('hidden');
+        showMainMenu();
+        overlaySub.textContent = 'Could not reach the multiplayer network. Check your connection and try again.';
+        return;
+      }
+    }
+
+    mp.room = trysteroJoinRoom({ appId: MP_APP_ID }, MP_ROOM_ID);
+    mp.scoreAction = mp.room.makeAction('score');
+
+    mp.scoreAction.onMessage = (data, { peerId }) => {
+      if (peerId !== mp.opponentId) return;
+      mp.oppScore = data.score;
+      mpOppScoreEl.textContent = String(data.score);
+      if (data.finished) {
+        mp.oppFinished = true;
+        mp.oppFinalScore = data.score;
+        if (mp.myFinished) showMpResult();
+      }
+    };
+
+    mp.room.onPeerJoin = (peerId) => {
+      if (mp.opponentId) return; // already paired; ignore extra players in the lobby
+      mp.opponentId = peerId;
+      clearTimeout(mp.searchTimer);
+      mpSearchPanel.classList.add('hidden');
+      startGame(true);
+    };
+
+    mp.room.onPeerLeave = (peerId) => {
+      if (peerId !== mp.opponentId) return;
+      mp.oppLeft = true;
+      mpOppLabel.textContent = 'OPP (left)';
+      if (mp.myFinished) showMpResult();
+    };
+
+    mp.searchTimer = setTimeout(() => {
+      if (!mp.opponentId) {
+        leaveMultiplayer();
+        mpSearchPanel.classList.add('hidden');
+        showMainMenu();
+        overlaySub.textContent = 'No opponents found right now. Try again in a bit!';
+      }
+    }, MP_SEARCH_TIMEOUT_MS);
+  }
+
+  function finishMultiplayerRound() {
+    sfxCrash();
+    triggerShake(16);
+    mp.myFinished = true;
+    mp.myFinalScore = score;
+    if (score > best) {
+      best = score;
+      localStorage.setItem(BEST_KEY, String(best));
+    }
+    bestEl.textContent = 'Best: ' + best;
+    addScoreToLeaderboard(score);
+    if (mp.room && mp.opponentId && mp.scoreAction) {
+      mp.scoreAction.send({ score, alive: false, finished: true }, { target: mp.opponentId });
+    }
+    if (mp.oppFinished || mp.oppLeft) {
+      showMpResult();
+    } else {
+      state = STATE.MP_WAITING;
+      mpWaitPanel.classList.remove('hidden');
+    }
+  }
+
+  function showMpResult() {
+    state = STATE.MP_RESULT;
+    mpWaitPanel.classList.add('hidden');
+    mpVsPanel.classList.add('hidden');
+    const oppFinal = mp.oppFinished ? mp.oppFinalScore : mp.oppScore;
+    let title, sub;
+    if (mp.oppLeft && !mp.oppFinished) {
+      title = 'YOU WIN!';
+      sub = 'Opponent disconnected.';
+    } else if (mp.myFinalScore > oppFinal) {
+      title = 'YOU WIN!';
+      sub = 'You out-flew your opponent.';
+    } else if (mp.myFinalScore < oppFinal) {
+      title = 'YOU LOSE';
+      sub = 'Your opponent flew further. Rematch?';
+    } else {
+      title = "IT'S A DRAW";
+      sub = 'Perfectly matched pilots.';
+    }
+    mpResultTitle.textContent = title;
+    mpResultSub.textContent = sub;
+    mpResultScores.textContent = `YOU: ${mp.myFinalScore}  •  OPP: ${oppFinal}`;
+    mpResultPanel.classList.remove('hidden');
+    leaveMultiplayer();
+  }
+
+  menuMultiplayerBtn.addEventListener('click', (e) => { e.stopPropagation(); startMultiplayerSearch(); });
+  mpCancelBtn.addEventListener('click', (e) => { e.stopPropagation(); cancelMultiplayerSearch(); });
+  mpLeaveBtn.addEventListener('click', (e) => { e.stopPropagation(); showMpResult(); });
+  mpRematchBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    mpResultPanel.classList.add('hidden');
+    startMultiplayerSearch();
+  });
+  mpMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    mpResultPanel.classList.add('hidden');
+    leaveMultiplayer();
+    showMainMenu();
+  });
 
   // ---------- Audio (synthesized, no external files) ----------
   const MUTE_KEY = 'ironDragonMuted';
@@ -826,9 +1163,17 @@
       startGame();
       return;
     }
+    if (!isPlayingState(state)) return; // MP_SEARCH / MP_RESULT: use the on-screen buttons instead
     dragon.vy = FLAP_VELOCITY;
     spawnFlame(true);
     sfxFlap();
+  }
+
+  function isUiTarget(target) {
+    return target === muteBtn || target === boardBtn ||
+      leaderboardPanel.contains(target) || mpSearchPanel.contains(target) ||
+      mpResultPanel.contains(target) || mpWaitPanel.contains(target) ||
+      target.closest?.('#menuRow');
   }
 
   window.addEventListener('keydown', (e) => {
@@ -838,18 +1183,18 @@
     }
   });
   window.addEventListener('touchstart', (e) => {
-    if (e.target === muteBtn || e.target === boardBtn || leaderboardPanel.contains(e.target)) return;
+    if (isUiTarget(e.target)) return;
     e.preventDefault();
     flap();
   }, { passive: false });
   window.addEventListener('mousedown', (e) => {
-    if (e.target === muteBtn || e.target === boardBtn || leaderboardPanel.contains(e.target)) return;
+    if (isUiTarget(e.target)) return;
     flap();
   });
 
   // ---------- Game flow ----------
-  function startGame() {
-    state = STATE.PLAYING;
+  function startGame(mpMode) {
+    state = mpMode ? STATE.MP_PLAYING : STATE.PLAYING;
     pipes = [];
     particles = [];
     popups = [];
@@ -867,6 +1212,11 @@
     boardBtn.style.display = 'none';
     closeBoard();
     overlay.classList.add('hidden');
+    if (mpMode) {
+      mpMyScoreEl.textContent = '0';
+      mpOppScoreEl.textContent = '0';
+      mpVsPanel.classList.remove('hidden');
+    }
   }
 
   function getMedal(s) {
@@ -878,6 +1228,10 @@
   }
 
   function endGame() {
+    if (state === STATE.MP_PLAYING) {
+      finishMultiplayerRound();
+      return;
+    }
     state = STATE.DEAD;
     sfxCrash();
     triggerShake(16);
@@ -1399,7 +1753,7 @@
   let lastTime = 0;
 
   function update(dt, time) {
-    dragon.wingPhase += dt * (state === STATE.PLAYING ? 14 : 4);
+    dragon.wingPhase += dt * (isPlayingState(state) ? 14 : 4);
 
     // blink animation
     dragon.blinkTimer -= dt;
@@ -1415,7 +1769,7 @@
     if (shakeTime > 0) shakeTime -= dt;
     if (flashAlpha > 0) flashAlpha = Math.max(0, flashAlpha - dt * 1.8);
 
-    if (state !== STATE.PLAYING) {
+    if (!isPlayingState(state)) {
       // idle bob on start screen (no flames until the player actually presses)
       if (state === STATE.START) {
         dragon.y = H / 2 + Math.sin(time / 350) * 14;
@@ -1459,6 +1813,12 @@
         score++;
         scoreEl.textContent = String(score);
         sfxPoint();
+        if (state === STATE.MP_PLAYING) {
+          mpMyScoreEl.textContent = String(score);
+          if (mp.room && mp.opponentId && mp.scoreAction) {
+            mp.scoreAction.send({ score, alive: true }, { target: mp.opponentId });
+          }
+        }
       }
 
       // shield pickup
