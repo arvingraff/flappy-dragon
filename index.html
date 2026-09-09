@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Iron Dragon Flap</title>
+<title>Iron Pilot Flap</title>
 <style>
   html, body {
     margin: 0;
@@ -185,7 +185,7 @@
 <button id="boardBtn">🏆</button>
 
 <div id="overlay">
-  <h1 id="overlayTitle">IRON DRAGON</h1>
+  <h1 id="overlayTitle">IRON PILOT</h1>
   <p id="overlaySub">Tap or press Space to flap. Dodge the pillars and villain drones, and grab shields to survive hits.</p>
   <div id="finalScoreRow" style="display:none">Score: <span id="finalScore">0</span> &nbsp;•&nbsp; Best: <span id="finalBest">0</span></div>
   <div id="medalRow"></div>
@@ -421,9 +421,9 @@
   ];
 
   function spawnFlame(intensity) {
-    // emit from behind the dragon (tail thruster); only called on an active flap press
-    const backX = dragon.x - dragon.size * 1.05;
-    const backY = dragon.y + dragon.size * 0.15;
+    // emit from the boot thrusters (trailing behind the flying hero); only fires on an active flap press
+    const backX = dragon.x - dragon.size * 1.5;
+    const backY = dragon.y + dragon.size * 0.35;
     const count = intensity ? 9 : 3;
     const palette = FLAME_PALETTES[Math.floor(Math.random() * FLAME_PALETTES.length)];
     for (let i = 0; i < count; i++) {
@@ -662,6 +662,26 @@
     }
   }
 
+  function drawVillainArm(len, colorMain, colorClaw) {
+    ctx.beginPath();
+    ctx.ellipse(len * 0.3, 0, len * 0.24, len * 0.14, 0, 0, Math.PI * 2);
+    ctx.fillStyle = colorMain;
+    ctx.fill();
+    ctx.strokeStyle = '#0a0512';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // claw fingers
+    ctx.fillStyle = colorClaw;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(len * 0.55, i * len * 0.08);
+      ctx.lineTo(len * 0.85, i * len * 0.18);
+      ctx.lineTo(len * 0.6, i * len * 0.03);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
   function drawVillain(v, time) {
     ctx.save();
     ctx.translate(v.x, v.y);
@@ -680,6 +700,14 @@
     ctx.fillStyle = capeGrad;
     ctx.fill();
 
+    // rear clawed arm (tucked, adds silhouette detail behind the body)
+    const armSwing = Math.sin(time / 260) * 0.15;
+    ctx.save();
+    ctx.translate(s * 0.35, s * 0.35);
+    ctx.rotate(0.6 + armSwing);
+    drawVillainArm(s * 0.55, t.body[1], t.spike);
+    ctx.restore();
+
     // metallic body (original armored-villain design, unique per type)
     const bodyGrad = ctx.createRadialGradient(-s * 0.2, -s * 0.2, s * 0.1, 0, 0, s);
     bodyGrad.addColorStop(0, t.body[0]);
@@ -693,6 +721,23 @@
     ctx.lineWidth = 2;
     ctx.stroke();
 
+    // torso vent lines (greeble detail)
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.3 + i * s * 0.18, -s * 0.15);
+      ctx.lineTo(-s * 0.3 + i * s * 0.18, s * 0.35);
+      ctx.stroke();
+    }
+
+    // front clawed arm (reaching toward the player, on top)
+    ctx.save();
+    ctx.translate(-s * 0.25, s * 0.3);
+    ctx.rotate(-0.4 - armSwing);
+    drawVillainArm(s * 0.65, t.body[0], t.spike);
+    ctx.restore();
+
     // shoulder spikes
     ctx.fillStyle = t.spike;
     [[-0.55, -0.5], [0.55, -0.5]].forEach(([sx, sy]) => {
@@ -704,15 +749,39 @@
       ctx.fill();
     });
 
+    // ---- head unit (distinct capsule up front, more detail than a simple visor) ----
+    ctx.save();
+    ctx.translate(-s * 0.55, -s * 0.42);
+    const headGrad = ctx.createRadialGradient(-s * 0.1, -s * 0.1, s * 0.05, 0, 0, s * 0.34);
+    headGrad.addColorStop(0, t.body[0]);
+    headGrad.addColorStop(1, t.body[2]);
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.34, 0, Math.PI * 2);
+    ctx.fillStyle = headGrad;
+    ctx.fill();
+    ctx.strokeStyle = '#0a0512';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // antenna (type-colored, mechanical)
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.05, -s * 0.3);
+    ctx.lineTo(-s * 0.02, -s * 0.5);
+    ctx.lineTo(s * 0.06, -s * 0.3);
+    ctx.closePath();
+    ctx.fillStyle = t.spike;
+    ctx.fill();
+
     // glowing visor/eye band (menacing, fully original per type)
     const visorGlow = 0.7 + 0.3 * Math.sin(time / 140);
     ctx.beginPath();
-    ctx.ellipse(-s * 0.15, -s * 0.05, s * 0.5, s * 0.14, 0, 0, Math.PI * 2);
-    const visorGrad = ctx.createRadialGradient(-s * 0.15, -s * 0.05, 0, -s * 0.15, -s * 0.05, s * 0.5);
+    ctx.ellipse(-s * 0.02, s * 0.02, s * 0.26, s * 0.1, 0, 0, Math.PI * 2);
+    const visorGrad = ctx.createRadialGradient(-s * 0.02, s * 0.02, 0, -s * 0.02, s * 0.02, s * 0.26);
     visorGrad.addColorStop(0, `rgba(${t.visor},${visorGlow})`);
     visorGrad.addColorStop(1, `rgba(${t.visor.split(',')[0]},0,0,0)`);
     ctx.fillStyle = visorGrad;
     ctx.fill();
+    ctx.restore();
 
     // charge flash right before shooting
     if (v.flash > 0) {
@@ -1021,246 +1090,170 @@
     ctx.restore();
   }
 
+  // ---------- Armored hero (original design, not any copyrighted character) ----------
+  const HERO_SIZE = 26;
+  const HERO_SCHEME_SELF = {
+    suitMain: ['#ff2d00', '#ff5a1f', '#c21e00'],
+    suitLeg: ['#ff5a1f', '#c21e00'],
+    suitLegRear: ['#9a1400', '#6e0d00'],
+    gold: '#ffd23f',
+    goldDark: '#a86a00',
+    helmetOuter: ['#ff5a1f', '#ff2d00', '#8a1400'],
+    visorGlow: ['#eafcff', '#8fe8ff', '#2a9fd6'],
+    outline: '#5c1400'
+  };
+  const HERO_SCHEME_OPPONENT = {
+    suitMain: ['#2d6bff', '#4f8bff', '#1a3fae'],
+    suitLeg: ['#4f8bff', '#1a3fae'],
+    suitLegRear: ['#143a8a', '#0d275e'],
+    gold: '#cbd8ff',
+    goldDark: '#6a86c9',
+    helmetOuter: ['#4f8bff', '#2d6bff', '#14338a'],
+    visorGlow: ['#fff5ea', '#ffce8f', '#d68a2a'],
+    outline: '#0d275e'
+  };
+
   function drawDragon(time) {
     const d = dragon;
+    const invulnFlicker = d.invulnTimer > 0 && Math.floor(time / 80) % 2 === 0;
+    drawHero(d.x, d.y, d.rot, d.wingPhase, d.blinkState, invulnFlicker, d.shielded, time, HERO_SCHEME_SELF);
+  }
+
+  function drawHero(x, y, rot, wingPhase, blinkState, invulnFlicker, shielded, time, scheme) {
     ctx.save();
-    ctx.translate(d.x, d.y);
-    ctx.rotate(d.rot);
+    ctx.translate(x, y);
+    ctx.rotate(rot);
 
-    // flicker while briefly invulnerable after a shield break
-    if (d.invulnTimer > 0 && Math.floor(time / 80) % 2 === 0) {
-      ctx.globalAlpha = 0.45;
-    }
+    if (invulnFlicker) ctx.globalAlpha = 0.45;
 
-    const s = d.size;
-    const flap = Math.sin(d.wingPhase) * 0.5 + 0.5; // 0..1
-    const legTuck = Math.sin(d.wingPhase * 0.5) * 0.15;
+    const s = HERO_SIZE;
+    const thrusterPulse = Math.sin(wingPhase) * 0.5 + 0.5; // 0..1, pulses boot glow with flap animation
+    const legSwing = Math.sin(wingPhase * 0.5) * 0.12;
 
-    // ---- back leg (tucked under belly) ----
+    // ---- rear leg (trailing behind for flight pose) ----
     ctx.save();
-    ctx.translate(-s * 0.15, s * 0.55);
-    ctx.rotate(0.3 + legTuck);
-    drawLeg(s * 0.55, '#7a1f00');
+    ctx.translate(-s * 0.55, s * 0.25);
+    ctx.rotate(0.55 + legSwing);
+    drawHeroLeg(s * 0.85, scheme.suitLegRear[0], scheme.suitLegRear[1], scheme);
     ctx.restore();
 
-    // ---- back wing (mechanical plate) ----
+    // ---- rear arm (tucked alongside torso) ----
     ctx.save();
-    ctx.translate(-s * 0.3, 0);
-    ctx.rotate(-0.5 - flap * 0.6);
-    drawWing(s, '#8a1a00', '#3fd0ff');
+    ctx.translate(-s * 0.15, -s * 0.1);
+    ctx.rotate(0.7 - legSwing);
+    drawHeroArm(s * 0.6, scheme.suitMain[2], scheme.gold, false, time, scheme);
     ctx.restore();
 
-    // ---- tail with thruster ----
+    // ---- boot thruster glow (lit continuously, pulses with flap) ----
+    const bootX = -s * 1.5, bootY = s * 0.55;
+    const bootR = s * (0.5 + thrusterPulse * 0.25);
+    const bootGlow = ctx.createRadialGradient(bootX, bootY, 0, bootX, bootY, bootR);
+    bootGlow.addColorStop(0, 'rgba(255,235,160,0.9)');
+    bootGlow.addColorStop(0.4, 'rgba(255,140,20,0.6)');
+    bootGlow.addColorStop(1, 'rgba(255,80,0,0)');
+    ctx.fillStyle = bootGlow;
     ctx.beginPath();
-    ctx.moveTo(-s * 0.9, s * 0.1);
-    ctx.quadraticCurveTo(-s * 1.55, s * 0.42, -s * 1.85, s * 0.08);
-    ctx.quadraticCurveTo(-s * 1.55, s * 0.05, -s * 1.85, -s * 0.28);
-    ctx.quadraticCurveTo(-s * 1.5, s * 0.02, -s * 0.8, -s * 0.05);
-    ctx.closePath();
-    const tailGrad = ctx.createLinearGradient(-s * 1.9, 0, -s * 0.8, 0);
-    tailGrad.addColorStop(0, '#b31d00');
-    tailGrad.addColorStop(1, '#ff3d00');
-    ctx.fillStyle = tailGrad;
+    ctx.arc(bootX, bootY, bootR, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#5c1400';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
 
-    // thruster nozzle ring + glow (afterburner look, always lit while playing)
-    const nozzleX = -s * 1.85, nozzleY = -s * 0.08;
-    const nozzleGlow = ctx.createRadialGradient(nozzleX, nozzleY, 0, nozzleX, nozzleY, s * 0.55);
-    nozzleGlow.addColorStop(0, 'rgba(255,235,160,0.9)');
-    nozzleGlow.addColorStop(0.4, 'rgba(255,140,20,0.6)');
-    nozzleGlow.addColorStop(1, 'rgba(255,80,0,0)');
-    ctx.fillStyle = nozzleGlow;
+    // ---- torso / chest armor ----
+    const bodyGrad = ctx.createLinearGradient(-s * 0.6, -s * 0.6, s * 0.6, s * 0.6);
+    bodyGrad.addColorStop(0, scheme.suitMain[0]);
+    bodyGrad.addColorStop(0.5, scheme.suitMain[1]);
+    bodyGrad.addColorStop(1, scheme.suitMain[2]);
     ctx.beginPath();
-    ctx.arc(nozzleX, nozzleY, s * 0.55, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(nozzleX, nozzleY, s * 0.22, 0, Math.PI * 2);
-    ctx.fillStyle = '#3a2a1a';
-    ctx.fill();
-    ctx.strokeStyle = '#ffd23f';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // ---- body ----
-    const bodyGrad = ctx.createLinearGradient(-s, -s, s, s);
-    bodyGrad.addColorStop(0, '#ff2d00');
-    bodyGrad.addColorStop(0.5, '#ff5a1f');
-    bodyGrad.addColorStop(1, '#c21e00');
-    ctx.beginPath();
-    ctx.ellipse(0, 0, s * 1.05, s * 0.78, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, s * 0.62, s * 0.85, -0.15, 0, Math.PI * 2);
     ctx.fillStyle = bodyGrad;
     ctx.fill();
     ctx.lineWidth = 2;
-    ctx.strokeStyle = '#5c1400';
+    ctx.strokeStyle = scheme.outline;
     ctx.stroke();
 
-    // back spikes row (Iron-Man gold, mechanical)
-    for (let i = 0; i < 4; i++) {
-      const px = s * (0.55 - i * 0.35);
-      const py = -Math.sqrt(Math.max(0, (s * 0.78) ** 2 * (1 - (px / (s * 1.05)) ** 2))) * 0.95;
-      const spH = s * (0.32 - i * 0.03);
-      ctx.beginPath();
-      ctx.moveTo(px - s * 0.13, py + 2);
-      ctx.lineTo(px, py - spH);
-      ctx.lineTo(px + s * 0.13, py + 2);
-      ctx.closePath();
-      ctx.fillStyle = '#ffd23f';
-      ctx.fill();
-      ctx.strokeStyle = '#a86a00';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
+    // torso panel lines (armor plating detail)
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.3, -s * 0.5); ctx.lineTo(-s * 0.35, s * 0.5);
+    ctx.moveTo(s * 0.05, -s * 0.65); ctx.lineTo(s * 0.02, s * 0.65);
+    ctx.stroke();
+
+    // belt
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.55, s * 0.6, s * 0.14, -0.1, 0, Math.PI * 2);
+    ctx.fillStyle = scheme.gold;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, s * 0.55, s * 0.08, 0, Math.PI * 2);
+    ctx.fillStyle = scheme.goldDark;
+    ctx.fill();
 
     // ---- front leg ----
     ctx.save();
-    ctx.translate(s * 0.2, s * 0.55);
-    ctx.rotate(0.15 - legTuck);
-    drawLeg(s * 0.6, '#ff5a1f');
+    ctx.translate(s * 0.1, s * 0.35);
+    ctx.rotate(0.35 - legSwing);
+    drawHeroLeg(s * 0.9, scheme.suitLeg[0], scheme.suitLeg[1], scheme);
     ctx.restore();
 
-    // gold chest plate / armor accent (Iron Man style)
+    // chest triangle + arc reactor
     ctx.beginPath();
-    ctx.ellipse(s * 0.05, s * 0.05, s * 0.55, s * 0.4, 0, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffd23f';
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(s * 0.05, s * 0.05, s * 0.3, s * 0.22, 0, 0, Math.PI * 2);
-    ctx.fillStyle = '#ff9a00';
+    ctx.moveTo(0, -s * 0.55);
+    ctx.lineTo(s * 0.32, -s * 0.05);
+    ctx.lineTo(-s * 0.28, -s * 0.05);
+    ctx.closePath();
+    ctx.fillStyle = scheme.gold;
     ctx.fill();
 
-    // arc-reactor glow dot, pulsing like a heartbeat
     const reactorPulse = 0.85 + 0.25 * Math.sin(time / 220);
     ctx.beginPath();
-    ctx.arc(s * 0.05, s * 0.05, s * 0.12 * reactorPulse, 0, Math.PI * 2);
-    const glowGrad = ctx.createRadialGradient(s * 0.05, s * 0.05, 0, s * 0.05, s * 0.05, s * 0.12 * reactorPulse);
-    glowGrad.addColorStop(0, '#eafcff');
-    glowGrad.addColorStop(0.5, '#8fe8ff');
-    glowGrad.addColorStop(1, '#2a9fd6');
+    ctx.arc(0, -s * 0.25, s * 0.14 * reactorPulse, 0, Math.PI * 2);
+    const glowGrad = ctx.createRadialGradient(0, -s * 0.25, 0, 0, -s * 0.25, s * 0.14 * reactorPulse);
+    glowGrad.addColorStop(0, scheme.visorGlow[0]);
+    glowGrad.addColorStop(0.5, scheme.visorGlow[1]);
+    glowGrad.addColorStop(1, scheme.visorGlow[2]);
     ctx.fillStyle = glowGrad;
     ctx.fill();
 
-    // plate rivets
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    [[-0.35,-0.15], [0.4,-0.2], [-0.2,0.3], [0.35,0.28]].forEach(([px,py]) => {
+    // shoulder pauldrons
+    [[-s * 0.45, -s * 0.55], [s * 0.4, -s * 0.6]].forEach(([px, py]) => {
       ctx.beginPath();
-      ctx.arc(px * s, py * s, s * 0.045, 0, Math.PI * 2);
+      ctx.arc(px, py, s * 0.22, 0, Math.PI * 2);
+      const pg = ctx.createRadialGradient(px - s * 0.06, py - s * 0.06, 0, px, py, s * 0.22);
+      pg.addColorStop(0, '#fff3c0');
+      pg.addColorStop(1, scheme.goldDark);
+      ctx.fillStyle = pg;
+      ctx.fill();
+      ctx.strokeStyle = scheme.outline;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    // chest rivets
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    [[-0.25, 0.15], [0.25, 0.1], [-0.1, 0.35], [0.15, 0.4]].forEach(([px, py]) => {
+      ctx.beginPath();
+      ctx.arc(px * s, py * s, s * 0.04, 0, Math.PI * 2);
       ctx.fill();
     });
 
-    // ---- head / snout ----
-    ctx.beginPath();
-    ctx.moveTo(s * 0.7, -s * 0.4);
-    ctx.quadraticCurveTo(s * 1.5, -s * 0.18, s * 1.55, s * 0.05);
-    ctx.quadraticCurveTo(s * 1.5, s * 0.28, s * 0.78, s * 0.3);
-    ctx.closePath();
-    ctx.fillStyle = '#ff5a1f';
-    ctx.fill();
-    ctx.stroke();
-
-    // brow ridge
-    ctx.beginPath();
-    ctx.moveTo(s * 0.78, -s * 0.28);
-    ctx.quadraticCurveTo(s * 1.05, -s * 0.42, s * 1.3, -s * 0.28);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#ffd23f';
-    ctx.stroke();
-
-    // jaw line + small teeth
-    ctx.beginPath();
-    ctx.moveTo(s * 0.85, s * 0.14);
-    ctx.lineTo(s * 1.4, s * 0.12);
-    ctx.strokeStyle = '#7a1f00';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.fillStyle = '#fff8e0';
-    for (let i = 0; i < 3; i++) {
-      const tx = s * 0.95 + i * s * 0.16;
-      ctx.beginPath();
-      ctx.moveTo(tx, s * 0.14);
-      ctx.lineTo(tx + s * 0.05, s * 0.14);
-      ctx.lineTo(tx + s * 0.025, s * 0.22);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // double horns (mechanical, yellow)
-    ctx.beginPath();
-    ctx.moveTo(s * 0.62, -s * 0.5);
-    ctx.lineTo(s * 0.46, -s * 0.92);
-    ctx.lineTo(s * 0.82, -s * 0.58);
-    ctx.closePath();
-    ctx.fillStyle = '#ffd23f';
-    ctx.fill();
-    ctx.strokeStyle = '#a86a00';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(s * 0.85, -s * 0.48);
-    ctx.lineTo(s * 0.78, -s * 0.78);
-    ctx.lineTo(s * 1.02, -s * 0.5);
-    ctx.closePath();
-    ctx.fillStyle = '#ffb92e';
-    ctx.fill();
-    ctx.stroke();
-
-    // ear fin
-    ctx.beginPath();
-    ctx.moveTo(s * 0.5, -s * 0.2);
-    ctx.quadraticCurveTo(s * 0.3, -s * 0.05, s * 0.45, s * 0.12);
-    ctx.closePath();
-    ctx.fillStyle = '#c21e00';
-    ctx.fill();
-
-    // eye (glowing, with blink)
-    const eyeOpen = 1 - d.blinkState;
-    ctx.beginPath();
-    ctx.ellipse(s * 1.05, -s * 0.06, s * 0.11, Math.max(0.01, s * 0.11 * eyeOpen), 0, 0, Math.PI * 2);
-    const eyeGrad = ctx.createRadialGradient(s * 1.05, -s * 0.06, 0, s * 1.05, -s * 0.06, s * 0.11);
-    eyeGrad.addColorStop(0, '#fff9d0');
-    eyeGrad.addColorStop(0.5, '#ffe14d');
-    eyeGrad.addColorStop(1, '#ff8a00');
-    ctx.fillStyle = eyeGrad;
-    ctx.fill();
-
-    // snout tip (yellow highlight)
-    ctx.beginPath();
-    ctx.moveTo(s * 1.4, -s * 0.05);
-    ctx.lineTo(s * 1.55, s * 0.05);
-    ctx.lineTo(s * 1.35, s * 0.18);
-    ctx.closePath();
-    ctx.fillStyle = '#ffd23f';
-    ctx.fill();
-
-    // shoulder mini-thruster puffs (subtle, syncing with flap)
-    if (flap > 0.6) {
-      ctx.save();
-      ctx.globalAlpha = (flap - 0.6) * 2;
-      const puffGrad = ctx.createRadialGradient(-s * 0.1, -s * 0.35, 0, -s * 0.1, -s * 0.35, s * 0.3);
-      puffGrad.addColorStop(0, 'rgba(255,220,140,0.8)');
-      puffGrad.addColorStop(1, 'rgba(255,120,20,0)');
-      ctx.fillStyle = puffGrad;
-      ctx.beginPath();
-      ctx.arc(-s * 0.1, -s * 0.35, s * 0.3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // ---- front wing (on top, mechanical plate) ----
+    // ---- helmet / head ----
     ctx.save();
-    ctx.translate(s * 0.05, -s * 0.05);
-    ctx.rotate(-0.3 + flap * 0.8);
-    drawWing(s, '#ff7a2e', '#5fe0ff');
+    ctx.translate(s * 0.85, -s * 0.75);
+    drawHelmet(s, blinkState, time, scheme);
+    ctx.restore();
+
+    // ---- front arm (reaching forward, drawn on top, with repulsor glow) ----
+    ctx.save();
+    ctx.translate(s * 0.35, -s * 0.15);
+    ctx.rotate(-0.25 + thrusterPulse * 0.3);
+    drawHeroArm(s * 0.75, scheme.suitMain[1], scheme.gold, true, time, scheme);
     ctx.restore();
 
     ctx.restore();
 
     // shield bubble overlay (drawn in world space, not rotated with body for stability)
-    if (d.shielded) {
+    if (shielded) {
       ctx.save();
-      ctx.translate(d.x, d.y);
+      ctx.translate(x, y);
       const pulse = 0.9 + 0.1 * Math.sin(time / 160);
       ctx.beginPath();
       ctx.arc(0, 0, s * 1.7 * pulse, 0, Math.PI * 2);
@@ -1279,54 +1272,128 @@
     ctx.globalAlpha = 1;
   }
 
-  function drawLeg(len, color) {
+  function drawHelmet(s, blinkState, time, scheme) {
+    const r = s * 0.5;
+    const domeGrad = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+    domeGrad.addColorStop(0, scheme.helmetOuter[0]);
+    domeGrad.addColorStop(0.6, scheme.helmetOuter[1]);
+    domeGrad.addColorStop(1, scheme.helmetOuter[2]);
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(len * 0.3, len * 0.5, len * 0.15, len * 0.9);
-    ctx.lineTo(-len * 0.15, len * 0.9);
-    ctx.quadraticCurveTo(-len * 0.05, len * 0.5, -len * 0.1, 0);
-    ctx.closePath();
-    ctx.fillStyle = color;
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = domeGrad;
     ctx.fill();
-    ctx.strokeStyle = '#3a0e00';
+    ctx.strokeStyle = scheme.outline;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // gold faceplate (lower half / jaw)
+    ctx.beginPath();
+    ctx.ellipse(r * 0.05, r * 0.35, r * 0.75, r * 0.55, 0, 0, Math.PI);
+    ctx.fillStyle = scheme.gold;
+    ctx.fill();
+
+    // jaw line detail
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.5, r * 0.35);
+    ctx.lineTo(r * 0.6, r * 0.35);
+    ctx.strokeStyle = scheme.goldDark;
     ctx.lineWidth = 1;
     ctx.stroke();
-    // claws
-    ctx.fillStyle = '#2a2a2a';
-    for (let i = -1; i <= 1; i++) {
+
+    // brow ridge (mechanical V)
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.55, -r * 0.1);
+    ctx.lineTo(-r * 0.1, -r * 0.35);
+    ctx.lineTo(r * 0.4, -r * 0.15);
+    ctx.strokeStyle = scheme.goldDark;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // eye slits (glowing, blink-aware)
+    const eyeOpen = 1 - blinkState;
+    [[-r * 0.32, -r * 0.02], [r * 0.12, -r * 0.05]].forEach(([ex, ey]) => {
       ctx.beginPath();
-      ctx.moveTo(len * 0.15 * i, len * 0.9);
-      ctx.lineTo(len * 0.15 * i - 3, len * 1.05);
-      ctx.lineTo(len * 0.15 * i + 3, len * 0.92);
-      ctx.closePath();
+      ctx.ellipse(ex, ey, r * 0.22, Math.max(0.01, r * 0.09 * eyeOpen), 0, 0, Math.PI * 2);
+      const eg = ctx.createRadialGradient(ex, ey, 0, ex, ey, r * 0.22);
+      eg.addColorStop(0, scheme.visorGlow[0]);
+      eg.addColorStop(0.5, scheme.visorGlow[1]);
+      eg.addColorStop(1, scheme.visorGlow[2]);
+      ctx.fillStyle = eg;
+      ctx.fill();
+    });
+
+    // antenna nub
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.1, -r * 0.95);
+    ctx.lineTo(-r * 0.02, -r * 1.2);
+    ctx.lineTo(r * 0.06, -r * 0.95);
+    ctx.closePath();
+    ctx.fillStyle = scheme.gold;
+    ctx.fill();
+  }
+
+  function drawHeroArm(len, colorMain, colorGauntlet, withRepulsor, time, scheme) {
+    ctx.beginPath();
+    ctx.ellipse(len * 0.25, 0, len * 0.28, len * 0.16, 0, 0, Math.PI * 2);
+    ctx.fillStyle = colorMain;
+    ctx.fill();
+    ctx.strokeStyle = scheme.outline;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(len * 0.6, len * 0.05, len * 0.26, len * 0.15, 0.15, 0, Math.PI * 2);
+    ctx.fillStyle = colorGauntlet;
+    ctx.fill();
+    ctx.strokeStyle = scheme.goldDark;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(len * 0.92, len * 0.1, len * 0.16, 0, Math.PI * 2);
+    ctx.fillStyle = colorMain;
+    ctx.fill();
+
+    if (withRepulsor) {
+      const pulse = 0.6 + 0.4 * Math.abs(Math.sin(time / 300));
+      const glow = ctx.createRadialGradient(len * 0.98, len * 0.1, 0, len * 0.98, len * 0.1, len * 0.22 * pulse);
+      glow.addColorStop(0, `rgba(220,250,255,${pulse})`);
+      glow.addColorStop(1, 'rgba(120,200,255,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(len * 0.98, len * 0.1, len * 0.22 * pulse, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  function drawWing(s, color, energyColor) {
+  function drawHeroLeg(len, colorMain, colorBoot, scheme) {
     ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.quadraticCurveTo(s * 0.6, -s * 0.9, s * 1.3, -s * 0.55);
-    ctx.quadraticCurveTo(s * 0.7, -s * 0.35, s * 0.55, 0.05 * s);
-    ctx.quadraticCurveTo(s * 0.35, s * 0.15, 0, 0.05 * s);
-    ctx.closePath();
-    ctx.fillStyle = color;
+    ctx.ellipse(len * 0.2, 0, len * 0.22, len * 0.14, 0, 0, Math.PI * 2);
+    ctx.fillStyle = colorMain;
     ctx.fill();
-    ctx.strokeStyle = '#3a0e00';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = scheme.outline;
+    ctx.lineWidth = 1;
     ctx.stroke();
-    // glowing energy vane lines (arc-reactor blue, Iron Man accent)
-    ctx.strokeStyle = energyColor || 'rgba(0,0,0,0.3)';
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.85;
+
     ctx.beginPath();
-    ctx.moveTo(s * 0.15, -s * 0.05);
-    ctx.lineTo(s * 1.05, -s * 0.5);
-    ctx.moveTo(s * 0.1, s * 0.0);
-    ctx.lineTo(s * 0.75, -s * 0.3);
+    ctx.arc(len * 0.42, len * 0.02, len * 0.12, 0, Math.PI * 2);
+    ctx.fillStyle = scheme.gold;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.ellipse(len * 0.72, len * 0.05, len * 0.26, len * 0.15, 0.1, 0, Math.PI * 2);
+    ctx.fillStyle = colorBoot;
+    ctx.fill();
+    ctx.strokeStyle = scheme.outline;
+    ctx.lineWidth = 1;
     ctx.stroke();
-    ctx.globalAlpha = 1;
+
+    ctx.beginPath();
+    ctx.ellipse(len * 0.95, len * 0.1, len * 0.14, len * 0.08, 0, 0, Math.PI * 2);
+    ctx.fillStyle = scheme.gold;
+    ctx.fill();
   }
+
 
   // ---------- Main loop ----------
   let lastTime = 0;
