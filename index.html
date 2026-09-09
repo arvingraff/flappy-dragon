@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Iron Dragon Flap</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  #game {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(#1b2a4a, #35507a 60%, #4a6a94);
+  }
+  #ui {
+    position: fixed;
+    top: env(safe-area-inset-top, 0px);
+    left: 0;
+    width: 100%;
+    text-align: center;
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: #fff;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #score {
+    margin-top: 14px;
+    font-size: 48px;
+    font-weight: 800;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    color: #ffd23f;
+    -webkit-text-stroke: 1px #7a1f00;
+  }
+  #best {
+    font-size: 16px;
+    opacity: 0.85;
+    margin-top: -4px;
+    color: #fff;
+  }
+  #overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: #fff;
+    text-align: center;
+    background: rgba(0,0,0,0.35);
+    z-index: 20;
+  }
+  #overlay.hidden { display: none; }
+  #overlay h1 {
+    font-size: 34px;
+    margin: 0 0 6px 0;
+    color: #ff5a1f;
+    text-shadow: 0 0 12px rgba(255,90,20,0.8), 0 2px 4px rgba(0,0,0,0.6);
+    -webkit-text-stroke: 1px #ffd23f;
+  }
+  #overlay p {
+    font-size: 16px;
+    max-width: 280px;
+    margin: 4px 0 18px 0;
+    opacity: 0.9;
+  }
+  #overlay .tapText {
+    font-size: 20px;
+    font-weight: 700;
+    padding: 12px 28px;
+    border-radius: 30px;
+    background: linear-gradient(#ffcf3f, #ff5a1f);
+    color: #3a0f00;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    animation: pulse 1.2s infinite ease-in-out;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+  #finalScoreRow {
+    font-size: 18px;
+    margin-bottom: 18px;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div id="score">0</div>
+  <div id="best">Best: 0</div>
+</div>
+
+<div id="overlay">
+  <h1 id="overlayTitle">IRON DRAGON</h1>
+  <p id="overlaySub">Tap or press Space to flap. Dodge the pillars, blast through with your thrusters.</p>
+  <div id="finalScoreRow" style="display:none">Score: <span id="finalScore">0</span> &nbsp;•&nbsp; Best: <span id="finalBest">0</span></div>
+  <div class="tapText" id="tapText">TAP TO START</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+  const overlay = document.getElementById('overlay');
+  const overlayTitle = document.getElementById('overlayTitle');
+  const overlaySub = document.getElementById('overlaySub');
+  const tapText = document.getElementById('tapText');
+  const finalScoreRow = document.getElementById('finalScoreRow');
+  const finalScoreEl = document.getElementById('finalScore');
+  const finalBestEl = document.getElementById('finalBest');
+
+  let dpr = Math.max(1, window.devicePixelRatio || 1);
+  let W = 0, H = 0;
+
+  function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- Game constants ----------
+  const GRAVITY = 1900;         // px/s^2
+  const FLAP_VELOCITY = -560;   // px/s
+  const MAX_FALL_SPEED = 900;
+  const PIPE_SPEED = 190;       // px/s, scales slightly with score
+  const PIPE_GAP = 190;
+  const PIPE_WIDTH = 74;
+  const PIPE_INTERVAL = 1450;   // ms between pipes
+
+  const STATE = { START: 'start', PLAYING: 'playing', DEAD: 'dead' };
+  let state = STATE.START;
+
+  const BEST_KEY = 'ironDragonBestScore';
+  let best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+  bestEl.textContent = 'Best: ' + best;
+
+  // ---------- Dragon ----------
+  const dragon = {
+    x: 0,
+    y: 0,
+    vy: 0,
+    rot: 0,
+    wingPhase: 0,
+    size: 26 // base scale radius
+  };
+
+  function resetDragon() {
+    dragon.x = Math.min(140, W * 0.28);
+    dragon.y = H / 2;
+    dragon.vy = 0;
+    dragon.rot = 0;
+    dragon.wingPhase = 0;
+  }
+
+  // ---------- Pipes ----------
+  let pipes = [];
+  let lastPipeTime = 0;
+  let score = 0;
+
+  function spawnPipe() {
+    const margin = 60;
+    const minTop = margin;
+    const maxTop = H - margin - PIPE_GAP;
+    const gapTop = minTop + Math.random() * Math.max(10, maxTop - minTop);
+    pipes.push({
+      x: W + PIPE_WIDTH,
+      gapTop: gapTop,
+      passed: false
+    });
+  }
+
+  // ---------- Flame particles ----------
+  let particles = [];
+
+  function spawnFlame(intensity) {
+    // emit from behind the dragon (tail thruster)
+    const backX = dragon.x - dragon.size * 1.05;
+    const backY = dragon.y + dragon.size * 0.15;
+    const count = intensity ? 4 : 1;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.PI + (Math.random() - 0.5) * 0.7;
+      const speed = (intensity ? 260 : 140) + Math.random() * 120;
+      particles.push({
+        x: backX,
+        y: backY + (Math.random() - 0.5) * 10,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed * 0.5 - 20,
+        life: 0,
+        maxLife: 0.35 + Math.random() * 0.25,
+        size: 6 + Math.random() * 7 * (intensity ? 1.4 : 1)
+      });
+    }
+  }
+
+  function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= 0.94;
+      p.vy = p.vy * 0.94 + 40 * dt;
+      if (p.life >= p.maxLife) particles.splice(i, 1);
+    }
+  }
+
+  function drawParticles() {
+    for (const p of particles) {
+      const t = p.life / p.maxLife; // 0 -> 1
+      const alpha = 1 - t;
+      const size = p.size * (1 - t * 0.6);
+      const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, size);
+      if (t < 0.4) {
+        grad.addColorStop(0, `rgba(255,255,220,${alpha})`);
+        grad.addColorStop(0.4, `rgba(255,220,60,${alpha})`);
+        grad.addColorStop(1, `rgba(255,120,20,0)`);
+      } else {
+        grad.addColorStop(0, `rgba(255,150,40,${alpha * 0.9})`);
+        grad.addColorStop(0.5, `rgba(255,80,20,${alpha * 0.6})`);
+        grad.addColorStop(1, `rgba(180,20,0,0)`);
+      }
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ---------- Input ----------
+  function flap() {
+    if (state === STATE.START) {
+      startGame();
+      return;
+    }
+    if (state === STATE.DEAD) {
+      startGame();
+      return;
+    }
+    dragon.vy = FLAP_VELOCITY;
+    spawnFlame(true);
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') {
+      e.preventDefault();
+      flap();
+    }
+  });
+  window.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    flap();
+  }, { passive: false });
+  window.addEventListener('mousedown', (e) => {
+    flap();
+  });
+
+  // ---------- Game flow ----------
+  function startGame() {
+    state = STATE.PLAYING;
+    pipes = [];
+    particles = [];
+    score = 0;
+    lastPipeTime = 0;
+    resetDragon();
+    scoreEl.textContent = '0';
+    overlay.classList.add('hidden');
+  }
+
+  function endGame() {
+    state = STATE.DEAD;
+    if (score > best) {
+      best = score;
+      localStorage.setItem(BEST_KEY, String(best));
+    }
+    bestEl.textContent = 'Best: ' + best;
+    overlayTitle.textContent = 'CRASHED!';
+    overlaySub.textContent = 'Your thrusters overheated. Try again!';
+    finalScoreRow.style.display = 'block';
+    finalScoreEl.textContent = String(score);
+    finalBestEl.textContent = String(best);
+    tapText.textContent = 'TAP TO RETRY';
+    overlay.classList.remove('hidden');
+  }
+
+  function circleRectCollide(cx, cy, cr, rx, ry, rw, rh) {
+    const nearestX = Math.max(rx, Math.min(cx, rx + rw));
+    const nearestY = Math.max(ry, Math.min(cy, ry + rh));
+    const dx = cx - nearestX;
+    const dy = cy - nearestY;
+    return (dx * dx + dy * dy) < (cr * cr);
+  }
+
+  // ---------- Drawing ----------
+  function drawBackground(time) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#12213f');
+    g.addColorStop(0.55, '#2c4a75');
+    g.addColorStop(1, '#4d7099');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // soft parallax clouds
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = '#fff';
+    const cloudOffset = (time / 40) % (W + 200);
+    for (let i = 0; i < 5; i++) {
+      const cx = ((i * 260) - cloudOffset + W + 200) % (W + 200) - 100;
+      const cy = 60 + (i % 3) * 90;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 60, 22, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 40, cy + 6, 40, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawPipes() {
+    for (const p of pipes) {
+      const topH = p.gapTop;
+      const botY = p.gapTop + PIPE_GAP;
+      const botH = H - botY;
+
+      // metallic red/yellow hazard-striped pillars (Iron Man vibe)
+      drawPillar(p.x, 0, PIPE_WIDTH, topH, true);
+      drawPillar(p.x, botY, PIPE_WIDTH, botH, false);
+    }
+  }
+
+  function drawPillar(x, y, w, h, isTop) {
+    const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+    grad.addColorStop(0, '#7a1f00');
+    grad.addColorStop(0.15, '#c23b12');
+    grad.addColorStop(0.5, '#ff7a2e');
+    grad.addColorStop(0.85, '#c23b12');
+    grad.addColorStop(1, '#5c1400');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+
+    // hazard stripes edge cap
+    const capH = 22;
+    const capY = isTop ? y + h - capH : y;
+    ctx.fillStyle = '#3a3a3a';
+    ctx.fillRect(x - 6, capY, w + 12, capH);
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - 6, capY, w + 12, capH);
+
+    // yellow/black hazard stripes on cap
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x - 6, capY, w + 12, capH);
+    ctx.clip();
+    ctx.fillStyle = '#ffd23f';
+    const stripeW = 14;
+    for (let sx = x - 6 - capH; sx < x + w + 12; sx += stripeW * 2) {
+      ctx.save();
+      ctx.translate(sx, capY);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(0, -20, stripeW, capH + 40);
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // rivets
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    for (let ry = y + 10; ry < y + h - 10; ry += 26) {
+      ctx.beginPath();
+      ctx.arc(x + 6, ry, 2.5, 0, Math.PI * 2);
+      ctx.arc(x + w - 6, ry, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawDragon(time) {
+    const d = dragon;
+    ctx.save();
+    ctx.translate(d.x, d.y);
+    ctx.rotate(d.rot);
+
+    const s = d.size;
+    const flap = Math.sin(d.wingPhase) * 0.5 + 0.5; // 0..1
+
+    // ---- back wing (mechanical plate) ----
+    ctx.save();
+    ctx.translate(-s * 0.3, 0);
+    ctx.rotate(-0.5 - flap * 0.6);
+    drawWing(s, '#8a1a00');
+    ctx.restore();
+
+    // ---- tail ----
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.9, s * 0.1);
+    ctx.quadraticCurveTo(-s * 1.6, s * 0.5, -s * 1.9, s * 0.05);
+    ctx.quadraticCurveTo(-s * 1.5, s * 0.15, -s * 0.8, -s * 0.05);
+    ctx.closePath();
+    const tailGrad = ctx.createLinearGradient(-s * 1.9, 0, -s * 0.8, 0);
+    tailGrad.addColorStop(0, '#b31d00');
+    tailGrad.addColorStop(1, '#ff3d00');
+    ctx.fillStyle = tailGrad;
+    ctx.fill();
+
+    // ---- body ----
+    const bodyGrad = ctx.createLinearGradient(-s, -s, s, s);
+    bodyGrad.addColorStop(0, '#ff2d00');
+    bodyGrad.addColorStop(0.5, '#ff5a1f');
+    bodyGrad.addColorStop(1, '#c21e00');
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s * 1.05, s * 0.78, 0, 0, Math.PI * 2);
+    ctx.fillStyle = bodyGrad;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#5c1400';
+    ctx.stroke();
+
+    // gold chest plate / armor accent (Iron Man style)
+    ctx.beginPath();
+    ctx.ellipse(s * 0.05, s * 0.05, s * 0.55, s * 0.4, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffd23f';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(s * 0.05, s * 0.05, s * 0.3, s * 0.22, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff9a00';
+    ctx.fill();
+    // arc-reactor glow dot
+    ctx.beginPath();
+    ctx.arc(s * 0.05, s * 0.05, s * 0.12, 0, Math.PI * 2);
+    const glowGrad = ctx.createRadialGradient(s * 0.05, s * 0.05, 0, s * 0.05, s * 0.05, s * 0.12);
+    glowGrad.addColorStop(0, '#fffbe0');
+    glowGrad.addColorStop(1, '#ffd23f');
+    ctx.fillStyle = glowGrad;
+    ctx.fill();
+
+    // plate rivets
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    [[-0.35,-0.15], [0.4,-0.2], [-0.2,0.3], [0.35,0.28]].forEach(([px,py]) => {
+      ctx.beginPath();
+      ctx.arc(px * s, py * s, s * 0.045, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // ---- head / snout ----
+    ctx.beginPath();
+    ctx.moveTo(s * 0.75, -s * 0.35);
+    ctx.quadraticCurveTo(s * 1.5, -s * 0.15, s * 1.55, s * 0.05);
+    ctx.quadraticCurveTo(s * 1.5, s * 0.25, s * 0.8, s * 0.28);
+    ctx.closePath();
+    ctx.fillStyle = '#ff5a1f';
+    ctx.fill();
+    ctx.stroke();
+
+    // horns (mechanical, yellow)
+    ctx.beginPath();
+    ctx.moveTo(s * 0.65, -s * 0.45);
+    ctx.lineTo(s * 0.5, -s * 0.85);
+    ctx.lineTo(s * 0.85, -s * 0.55);
+    ctx.closePath();
+    ctx.fillStyle = '#ffd23f';
+    ctx.fill();
+
+    // eye (glowing)
+    ctx.beginPath();
+    ctx.arc(s * 1.05, -s * 0.06, s * 0.11, 0, Math.PI * 2);
+    const eyeGrad = ctx.createRadialGradient(s * 1.05, -s * 0.06, 0, s * 1.05, -s * 0.06, s * 0.11);
+    eyeGrad.addColorStop(0, '#fff9d0');
+    eyeGrad.addColorStop(0.5, '#ffe14d');
+    eyeGrad.addColorStop(1, '#ff8a00');
+    ctx.fillStyle = eyeGrad;
+    ctx.fill();
+
+    // snout tip (yellow highlight)
+    ctx.beginPath();
+    ctx.moveTo(s * 1.4, -s * 0.05);
+    ctx.lineTo(s * 1.55, s * 0.05);
+    ctx.lineTo(s * 1.35, s * 0.18);
+    ctx.closePath();
+    ctx.fillStyle = '#ffd23f';
+    ctx.fill();
+
+    // ---- front wing (on top, mechanical plate) ----
+    ctx.save();
+    ctx.translate(s * 0.05, -s * 0.05);
+    ctx.rotate(-0.3 + flap * 0.8);
+    drawWing(s, '#ff7a2e');
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  function drawWing(s, color) {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(s * 0.6, -s * 0.9, s * 1.3, -s * 0.55);
+    ctx.quadraticCurveTo(s * 0.7, -s * 0.35, s * 0.55, 0.05 * s);
+    ctx.quadraticCurveTo(s * 0.35, s * 0.15, 0, 0.05 * s);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = '#3a0e00';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // wing vane lines
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.15, -s * 0.05);
+    ctx.lineTo(s * 1.05, -s * 0.5);
+    ctx.moveTo(s * 0.1, s * 0.0);
+    ctx.lineTo(s * 0.75, -s * 0.3);
+    ctx.stroke();
+  }
+
+  // ---------- Main loop ----------
+  let lastTime = 0;
+
+  function update(dt, time) {
+    dragon.wingPhase += dt * (state === STATE.PLAYING ? 14 : 4);
+
+    if (state !== STATE.PLAYING) {
+      // idle bob on start screen
+      if (state === STATE.START) {
+        dragon.y = H / 2 + Math.sin(time / 350) * 14;
+        if (Math.random() < dt * 6) spawnFlame(false);
+      }
+      updateParticles(dt);
+      return;
+    }
+
+    // physics
+    dragon.vy += GRAVITY * dt;
+    if (dragon.vy > MAX_FALL_SPEED) dragon.vy = MAX_FALL_SPEED;
+    dragon.y += dragon.vy * dt;
+    dragon.rot = Math.max(-0.5, Math.min(1.1, dragon.vy / 700));
+
+    // constant thruster flame while playing
+    if (Math.random() < dt * 20) spawnFlame(false);
+
+    // spawn pipes
+    lastPipeTime += dt * 1000;
+    const speed = PIPE_SPEED + Math.min(140, score * 4);
+    if (lastPipeTime >= PIPE_INTERVAL) {
+      lastPipeTime = 0;
+      spawnPipe();
+    }
+
+    // move pipes & scoring & collision
+    const dr = dragon.size * 0.55; // collision radius, forgiving
+    for (let i = pipes.length - 1; i >= 0; i--) {
+      const p = pipes[i];
+      p.x -= speed * dt;
+
+      if (!p.passed && p.x + PIPE_WIDTH < dragon.x - dragon.size) {
+        p.passed = true;
+        score++;
+        scoreEl.textContent = String(score);
+      }
+
+      const topH = p.gapTop;
+      const botY = p.gapTop + PIPE_GAP;
+      if (circleRectCollide(dragon.x, dragon.y, dr, p.x, 0, PIPE_WIDTH, topH) ||
+          circleRectCollide(dragon.x, dragon.y, dr, p.x, botY, PIPE_WIDTH, H - botY)) {
+        endGame();
+      }
+
+      if (p.x + PIPE_WIDTH < -10) pipes.splice(i, 1);
+    }
+
+    // ground / ceiling collision
+    if (dragon.y + dr > H || dragon.y - dr < 0) {
+      dragon.y = Math.max(dr, Math.min(H - dr, dragon.y));
+      endGame();
+    }
+
+    updateParticles(dt);
+  }
+
+  function render(time) {
+    drawBackground(time);
+    drawPipes();
+    drawParticles();
+    drawDragon(time);
+  }
+
+  function loop(time) {
+    if (!lastTime) lastTime = time;
+    let dt = (time - lastTime) / 1000;
+    dt = Math.min(dt, 0.033); // clamp for stability
+    lastTime = time;
+
+    update(dt, time);
+    render(time);
+
+    requestAnimationFrame(loop);
+  }
+
+  resetDragon();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
